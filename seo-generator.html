@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>JN Conviteria — Gerador SEO (Avançado)</title>
+<style>
+  :root{--bg:#fff;--muted:#666;--accent:#111}
+  body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;max-width:980px;margin:28px auto;padding:18px;color:var(--accent);background:var(--bg)}
+  h1{font-size:20px;margin-bottom:6px}
+  p.hint{color:var(--muted);font-size:13px;margin-top:0}
+  label{display:block;margin-top:12px;font-weight:600}
+  input,select,textarea,button{font-size:15px;padding:8px;margin-top:6px;width:100%;box-sizing:border-box;border:1px solid #e6e6e6;border-radius:6px}
+  .row{display:flex;gap:12px}
+  .row > *{flex:1}
+  .actions{display:flex;gap:8px;margin-top:12px}
+  button.primary{background:#111;color:#fff;border:none;padding:10px 14px;border-radius:8px;cursor:pointer}
+  button.ghost{background:#f4f4f4;border:1px solid #ddd;color:#111;padding:10px 14px;border-radius:8px;cursor:pointer}
+  pre#preview{background:#f8fafc;padding:12px;border-radius:8px;margin-top:12px;white-space:pre-wrap}
+  .small{font-size:13px;color:var(--muted)}
+  footer{margin-top:20px;color:var(--muted);font-size:13px}
+  .inline {display:inline-block;width:auto;margin-right:10px}
+  .flex-between{display:flex;justify-content:space-between;align-items:center}
+</style>
+</head>
+<body>
+<h1>JN Conviteria — Gerador SEO (Avançado)</h1>
+<p class="hint">Escolha serviço e cidade, gere posts SEO com variações, ganchos e 3 parágrafos extras (web / gráficos / marketing) sempre que aplicável. Baixe o .md para enviar ao GitHub.</p>
+
+<form id="form">
+  <div class="row">
+    <div>
+      <label>Categoria / Serviço</label>
+      <select id="service"></select>
+    </div>
+    <div>
+      <label>Cidade</label>
+      <select id="city"></select>
+    </div>
+  </div>
+
+  <label>Título (opcional — se vazio será gerado)</label>
+  <input id="titleOverride" placeholder="Ex: Slides para eventos corporativos em Feira de Santana" />
+
+  <div class="row">
+    <div>
+      <label>Formato do título</label>
+      <select id="titleFormat">
+        <option value="3">Serviço em Cidade (ex: Slides em Feira de Santana)</option>
+        <option value="2">Serviço — Cidade (ex: Slides — Feira de Santana)</option>
+        <option value="1">Empresas que fazem Serviço em Cidade</option>
+        <option value="4" selected>Variação aleatória</option>
+      </select>
+    </div>
+    <div>
+      <label>Template</label>
+      <select id="templateChoice">
+        <option value="default">Padrão (3 parágrafos)</option>
+        <option value="long">Longo (5 parágrafos + CTA)</option>
+      </select>
+    </div>
+  </div>
+
+  <label>Tags (vírgula separa)</label>
+  <input id="tags" placeholder="slides, eventos, feira-de-santana" />
+
+  <label>Slug (opcional — será gerado automaticamente se vazio)</label>
+  <input id="slug" placeholder="empresas-que-fazem-slides-em-feira-de-santana" />
+
+  <div class="row">
+    <div>
+      <label>Hora do post (opcional)</label>
+      <input id="timeOfDay" type="time" value="08:00" />
+      <div class="small">Ignorado no modo automático — será usado 08:00 / 12:00 / 18:00</div>
+    </div>
+    <div>
+      <label>Opções</label>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <label class="inline small"><input id="useAutoDate" type="checkbox" checked /> Usar data/hora automática (3 posts por dia)</label>
+        <label class="inline small"><input id="previewTitle" type="checkbox" /> Mostrar título gerado no preview</label>
+      </div>
+    </div>
+  </div>
+
+  <label>Conteúdo adicional (opcional — após os ganchos)</label>
+  <textarea id="extraContent" rows="6" placeholder="Adicione detalhes, contatos, diferenciais..."></textarea>
+
+  <div class="actions">
+    <button id="generateDownload" type="button" class="primary">Gerar & Baixar .md</button>
+    <button id="previewBtn" type="button" class="ghost">Atualizar Pré-visualização</button>
+    <button id="clearStorage" type="button" class="ghost">Limpar datas (localStorage)</button>
+  </div>
+
+  <button id="generateAll" type="button" class="primary">Gerar Tudo (.zip)</button>
+</form>
+
+<div style="margin-top:12px" class="flex-between">
+  <div><span class="small">Preview do Markdown gerado</span></div>
+  <div class="small"><button id="resetDate" class="ghost" style="padding:6px">Resetar data automática</button></div>
+</div>
+<pre id="preview" aria-live="polite"></pre>
+
+<footer>
+  <div class="small">Dica: gere vários arquivos e arraste para a pasta <code>_posts/</code> do seu repositório. Os posts com data futura serão publicados automaticamente na data/hora marcada.</div>
+</footer>
+
+<script>
+/* ========== DADOS (services, cities, hooks) ========== */
+const DATA = {
+  services: {
+    adesivos: { key:'adesivos', label:'Empresas que fazem adesivos personalizados', variations:['empresas que fazem adesivos personalizados'], type:'graphic' },
+    brindes: { key:'brindes', label:'Empresas que fazem brindes personalizados', variations:['empresas que fazem brindes personalizados'], type:'graphic' },
+    banner: { key:'banner', label:'Empresas que fazem banner', variations:['empresas que fazem banner'], type:'graphic' },
+    cracha: { key:'cracha', label:'Empresas que fazem crachá', variations:['empresas que fazem crachá'], type:'graphic' },
+    fachadas: { key:'fachadas', label:'Fachadas / Fachada de loja', variations:['empresas que fazem fachadas comerciais','empresas que fazem fachada de loja'], type:'graphic' },
+    presskit: { key:'presskit', label:'Press Kit', variations:['empresas que fazem press kit'], type:'graphic' },
+    sacolas: { key:'sacolas', label:'Sacolas personalizadas', variations:['empresas que fazem sacolas personalizadas'], type:'graphic' },
+    faixas: { key:'faixas', label:'Faixas', variations:['empresas que fazem faixas'], type:'graphic' }
+  },
+  cities: ['Salvador','Feira de Santana','Camaçari','Simões Filho','Lauro de Freitas'],
+  hooks: {
+    abertura: [
+      'Se você está buscando {{ termo }} em {{ cidade }}, este guia vai te ajudar.',
+      'Descubra agora como encontrar {{ termo }} em {{ cidade }} com segurança e rapidez.',
+      'Aqui está tudo que você precisa saber antes de contratar {{ termo }} em {{ cidade }}.',
+      'Se procura por {{ termo }} em {{ cidade }}, chegou ao lugar certo.'
+    ],
+    meio: [
+      'Muitas empresas oferecem {{ termo }}, mas nem todas entregam qualidade.',
+      'Para eventos profissionais em {{ cidade }}, escolher o fornecedor certo é essencial.',
+      'Ao contratar {{ termo }}, verifique sempre portfólio, prazos e valores.',
+      'Verifique portfólio e depoimentos antes de fechar com qualquer empresa que ofereça {{ termo }}.'
+    ],
+    fechamento: [
+      'Para solicitar orçamento de {{ termo }} em {{ cidade }}, clique no botão abaixo.',
+      'Quer contratar {{ termo }} com segurança? Aqui no Atendemidia você encontra!',
+      'Entre em contato agora e receba propostas rápidas para {{ termo }} em {{ cidade }}.',
+      'Solicite orçamentos e compare preços antes de fechar — é rápido e seguro.'
+    ]
+  }
+};
+
+/* ========== LISTAS PARA PARÁGRAFOS EXTRAS ========== */
+const GRAPHIC_SERVICES = ['logotipo e identidade visual','banners e faixas','brindes personalizados','adesivos personalizados','crachás e credenciais','sacolas personalizadas','press kits','material de papelaria'];
+const WEB_SERVICES = ['registro de domínio','hospedagem de sites','manutenção de sites','landing pages','divulgação em redes sociais','tráfego pago','SEO e marketing de conteúdo','edição de vídeos'];
+const EVENT_SERVICES = ['sonorização','iluminação','espacos para eventos','buffet e serviços de alimentação','apresentações e palestras'];
+
+/* ========== AGENDAMENTO: 3 POSTS POR DIA (08:00 → 12:00 → 18:00) ========== */
+const SCHEDULE_HOURS = ['08:00', '12:00', '18:00'];
+
+function getLastScheduled() {
+  const str = localStorage.getItem("seo_last_post_datetime");
+  return str ? new Date(str) : null;
+}
+
+function saveLastScheduled(date) {
+  localStorage.setItem("seo_last_post_datetime", date.toISOString());
+}
+
+function getNextPostDateTime() {
+  let last = getLastScheduled();
+  let next = new Date();
+
+  if (!last) {
+    // primeira execução → começa hoje às 08:00
+    next.setHours(8, 0, 0, 0);
+  } else {
+    next = new Date(last);
+    const currentHour = next.getHours();
+    const idx = SCHEDULE_HOURS.findIndex(h => parseInt(h) === currentHour);
+
+    if (idx === -1 || idx === 2) {
+      // último horário do dia ou horário inválido → vai para amanhã 08:00
+      next.setDate(next.getDate() + 1);
+      next.setHours(8, 0, 0, 0);
+    } else {
+      // avança para próximo horário do mesmo dia
+      const nextHour = SCHEDULE_HOURS[idx + 1];
+      next.setHours(parseInt(nextHour), 0, 0, 0);
+    }
+  }
+
+  // se por algum motivo o horário já passou hoje, joga para o próximo válido
+  const now = new Date();
+  if (next <= now) {
+    const idx = SCHEDULE_HOURS.findIndex(h => parseInt(h) === next.getHours());
+    if (idx < 2) {
+      const nextHour = SCHEDULE_HOURS[idx + 1];
+      next.setHours(parseInt(nextHour), 0, 0, 0);
+    } else {
+      next.setDate(next.getDate() + 1);
+      next.setHours(8, 0, 0, 0);
+    }
+  }
+
+  saveLastScheduled(next);
+  const ymd = next.toISOString().slice(0,10);
+  const time = next.toTimeString().slice(0,5);
+  return { date: ymd, time: time, full: `${ymd} ${time}` };
+}
+
+function resetAutoDate() {
+  localStorage.removeItem("seo_last_post_datetime");
+  alert('Contador resetado. Próximo post será hoje às 08:00.');
+}
+
+/* ========== HELPERS ========== */
+function sample(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function firstCap(s){ return String(s).charAt(0).toUpperCase() + String(s).slice(1); }
+function slugify(s){ return String(s).toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9\-_]/g,'').replace(/-+/g,'-').replace(/(^-|-$)/g,''); }
+function pickSome(arr, n){
+  const copy = arr.slice();
+  const chosen = [];
+  while(chosen.length < n && copy.length){
+    const i = Math.floor(Math.random()*copy.length);
+    chosen.push(copy.splice(i,1)[0]);
+  }
+  return chosen.join(', ');
+}
+
+/* ========== DETECÇÃO HUMOR ========== */
+function isTitleHumor(title){
+  if(!title) return false;
+  const t = title.toLowerCase();
+  const keys = ["sipat","humor","comedia","comédia","comediante","standup","stand up","palestra","palestras"];
+  return keys.some(k => t.includes(k));
+}
+
+/* ========== PARÁGRAFOS EXTRAS ========== */
+function buildExtraParagraphsAndFAQ(serviceKey, city, title, termo) {
+  const svc = DATA.services[serviceKey];
+  const type = svc.type || 'other';
+  const extras = [];
+
+  if(isTitleHumor(title) || type === 'humor') {
+    extras.push(`**Quanto custa?** Os valores para ${termo} em ${city} variam conforme o tipo de evento, quantidade de pessoas, nível de personalização, experiência do artista e logística. Apresentações simples podem partir de R$ 500, enquanto shows corporativos personalizados, que envolvem roteiro sob medida, deslocamento, hospedagem (quando necessário), equipe técnica e até produção de vídeo-homenagem, podem partir de R$1.000 e chegar a R$ 10.000 ou mais. Itens como coleta de informações sobre convidados para criação de interação personalizada, criação de material de apoio, e edição de vídeo com imagens da trajetória da empresa elevam o custo, pois exigem tempo de roteiro, gravação e edição profissional.`);
+    extras.push(`**Como escolher?** Ao entrar em contato, você normalmente será direcionado ao site ou ao contato do fornecedor/agenciador. Analise portfólio (vídeos de apresentações anteriores), experiência em SIPAT e palestras bem-humoradas, depoimentos de clientes e capacidade de adaptar o conteúdo ao tema solicitado (ex.: segurança, homenagem, integração). Palavras-chaves importantes: "Palestras bem humoradas", "Palestras SIPAT com toque de humor", "palestrante humorístico".`);
+    extras.push(`**Quanto tempo leva?** Existem formatos flexíveis: Stand-Up (15 a 50 minutos), apresentações médias (30–50 minutos) e shows que podem ultrapassar 1 hora. O artista também pode atuar como mestre de cerimônias, conduzir sorteios e apresentar palestrantes em um turno ou dia inteiro de programação.`);
+    extras.push(`**Temas & formatos comuns:** SIPAT, eventos corporativos, aniversários empresariais, confraternizações, palestras internas, homenagens à equipe.`);
+    return extras;
+  }
+
+  if(type === 'web' || type === 'slides' || type === 'video_inst' || type === 'trafego' || type === 'redes_sociais' || type === 'other'){
+    extras.push(`**Quanto custa?** O valor para contratar ${termo} varia conforme complexidade e volume. Orçamentos iniciais costumam variar entre R$ 500 a R$ 5.000 (ou mais) por mês para tráfego pago, e serviços gráficos/vídeos têm preço por peça ou projeto.`);
+    extras.push(`**Como escolher?** Solicite portfólio, estudos de caso e resultados. Um bom fornecedor apresenta fluxo claro (briefing → amostra → entrega final) e orienta sobre o investimento ideal.`);
+    extras.push(`**Qual prazo?** Peças simples em até 5 dias úteis; campanhas e vídeos podem levar semanas. Pagamento via PIX, transferência ou cartão.`);
+    extras.push(`**Serviços complementares:** Também trabalhamos com ${pickSome(WEB_SERVICES.concat(GRAPHIC_SERVICES),3)} em ${city}.`);
+    return extras;
+  }
+
+  if(type === 'graphic'){
+    extras.push(`**Quanto custa?** Influenciado por quantidade e material. Tiragens maiores têm custo unitário menor.`);
+    extras.push(`**Como escolher?** Peça amostras e verifique o material ideal para sua necessidade.`);
+    extras.push(`**Prazos:** Pré-visualizações em até 24h; produção conforme quantidade.`);
+    return extras;
+  }
+
+  extras.push(`Além de ${sample(svc.variations)}, conectamos você com serviços complementares em ${city}.`);
+  extras.push(`Oferecemos materiais gráficos e ações digitais para potencializar sua divulgação.`);
+  extras.push(`Entre em contato e receba orçamentos rápidos.`);
+  return extras;
+}
+
+/* ========== CTA ========== */
+function buildCTAForMarkdown(title, termo, city) {
+  const humor = isTitleHumor(title);
+  if(humor){
+    return `<p style="margin-top:20px;">
+  <a href="https://comedianteparaeventos.com" style="background:#111;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;display:inline-block;">
+    Solicitar orçamento
+  </a>
+</p>`;
+  } else {
+    const msg = encodeURIComponent(`Olá, vim pelo site Atende Mídia, buscando por ${termo} em ${city}`);
+    const wa = `https://wa.me/5511911894023?text=${msg}`;
+    return `<p style="margin-top:20px;">
+  <a href="${wa}" style="background:#111;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;display:inline-block;">
+    Solicitar orçamento
+  </a>
+</p>`;
+  }
+}
+
+/* ========== GERAÇÃO DO POST ========== */
+function buildPostMarkdown({serviceKey, city, titleOverride, titleFormat, templateChoice, tags, manualSlug, timeOfDay, extraContent}) {
+  const service = DATA.services[serviceKey];
+  const termo = sample(service.variations);
+  const title = titleOverride?.trim() || generateTitle(titleFormat, termo, city);
+  const slug = manualSlug?.trim() ? slugify(manualSlug.trim()) : slugify(title);
+
+  let postDate, postTime;
+  if(document.getElementById('useAutoDate').checked){
+    const next = getNextPostDateTime();
+    postDate = next.date;
+    postTime = next.time;
+  } else {
+    postDate = new Date().toISOString().slice(0,10);
+    postTime = timeOfDay || '00:00';
+  }
+
+  const hooks = DATA.hooks;
+  const blocks = [];
+  if(templateChoice === 'default'){
+    blocks.push(renderHook(sample(hooks.abertura), termo, city));
+    blocks.push(renderHook(sample(hooks.meio), termo, city));
+    blocks.push(renderHook(sample(hooks.fechamento), termo, city));
+  } else {
+    blocks.push(renderHook(sample(hooks.abertura), termo, city));
+    blocks.push(renderHook(sample(hooks.meio), termo, city));
+    blocks.push('Confira o portfólio e depoimentos para garantir a qualidade do fornecedor.');
+    blocks.push('Fique atento a prazos, logística e formas de pagamento antes de fechar contrato.');
+    blocks.push(renderHook(sample(hooks.fechamento), termo, city));
+  }
+
+  const extras = buildExtraParagraphsAndFAQ(serviceKey, city, title, termo);
+  extras.forEach(p => blocks.push(p));
+  if(extraContent?.trim()) blocks.push(extraContent.trim());
+
+  const fm = {
+    layout: 'post',
+    title: title,
+    date: `${postDate} ${postTime}`,
+    city: city,
+    category: serviceKey
+  };
+
+  let md = '---\n';
+  if(tags?.trim()){
+    const arr = tags.split(',').map(t=>t.trim()).filter(Boolean);
+    if(arr.length) fm.tags = arr;
+  }
+  for(const k in fm){
+    if(Array.isArray(fm[k])){
+      md += `${k}:\n`;
+      fm[k].forEach(v => md += ` - "${v.replace(/"/g,'\\"')}"\n`);
+    } else {
+      md += `${k}: "${String(fm[k]).replace(/"/g,'\\"')}"\n`;
+    }
+  }
+  md += '---\n\n';
+
+  blocks.forEach(p => md += p + '\n\n');
+  md += buildCTAForMarkdown(title, termo, city) + '\n\n';
+  md += `<!-- slug: ${postDate}-${slug} -->\n`;
+
+  return { md, filename: `${postDate}-${slug}.md`, title, postDate };
+}
+
+/* ========== TÍTULOS E HOOKS ========== */
+function generateTitle(format, termo, cidade){
+  const options = [
+    `${firstCap(termo)} em ${cidade}`,
+    `${firstCap(termo)} — ${cidade}`,
+    `${termo} em ${cidade}`
+  ];
+  return format === '4' ? sample(options) : options[parseInt(format)-1] || options[0];
+}
+function renderHook(template, termo, cidade){
+  return template.replace(/{{\s*termo\s*}}/g, termo).replace(/{{\s*cidade\s*}}/g, cidade);
+}
+
+/* ========== PREENCHER SELECTS ========== */
+const serviceSelect = document.getElementById('service');
+const citySelect = document.getElementById('city');
+Object.values(DATA.services).forEach(s => {
+  const opt = document.createElement('option');
+  opt.value = s.key;
+  opt.textContent = s.label;
+  serviceSelect.appendChild(opt);
+});
+DATA.cities.forEach(c => {
+  const opt = document.createElement('option');
+  opt.value = opt.textContent = c;
+  citySelect.appendChild(opt);
+});
+
+/* ========== PREVIEW (sem avançar contador) ========== */
+function updatePreview(){
+  const serviceKey = serviceSelect.value;
+  const city = citySelect.value;
+  const titleOverride = document.getElementById('titleOverride').value;
+  const titleFormat = document.getElementById('titleFormat').value;
+  const templateChoice = document.getElementById('templateChoice').value;
+  const tags = document.getElementById('tags').value;
+  const manualSlug = document.getElementById('slug').value;
+  const extraContent = document.getElementById('extraContent').value;
+  const showTitle = document.getElementById('previewTitle').checked;
+
+  const service = DATA.services[serviceKey];
+  const termo = sample(service.variations);
+  const title = titleOverride?.trim() || generateTitle(titleFormat, termo, city);
+  const slug = manualSlug?.trim() ? slugify(manualSlug.trim()) : slugify(title);
+
+  let previewDate, previewTime;
+  if(document.getElementById('useAutoDate').checked){
+    const last = getLastScheduled();
+    if(!last){
+      previewDate = new Date().toISOString().slice(0,10);
+      previewTime = '08:00';
+    } else {
+      const temp = new Date(last);
+      const idx = SCHEDULE_HOURS.findIndex(h => parseInt(h) === temp.getHours());
+      const nextIdx = idx < 2 ? idx + 1 : 0;
+      if(nextIdx === 0) temp.setDate(temp.getDate() + 1);
+      temp.setHours(parseInt(SCHEDULE_HOURS[nextIdx]), 0, 0, 0, 0);
+      previewDate = temp.toISOString().slice(0,10);
+      previewTime = SCHEDULE_HOURS[nextIdx];
+    }
+  } else {
+    previewDate = new Date().toISOString().slice(0,10);
+    previewTime = document.getElementById('timeOfDay').value || '00:00';
+  }
+
+  const blocks = [];
+  const hooks = DATA.hooks;
+  if(templateChoice === 'default'){
+    blocks.push(renderHook(sample(hooks.abertura), termo, city));
+    blocks.push(renderHook(sample(hooks.meio), termo, city));
+    blocks.push(renderHook(sample(hooks.fechamento), termo, city));
+  } else {
+    blocks.push(renderHook(sample(hooks.abertura), termo, city));
+    blocks.push(renderHook(sample(hooks.meio), termo, city));
+    blocks.push('Confira o portfólio e depoimentos para garantir a qualidade do fornecedor.');
+    blocks.push('Fique atento a prazos, logística e formas de pagamento antes de fechar contrato.');
+    blocks.push(renderHook(sample(hooks.fechamento), termo, city));
+  }
+  buildExtraParagraphsAndFAQ(serviceKey, city, title, termo).forEach(p => blocks.push(p));
+  if(extraContent.trim()) blocks.push(extraContent.trim());
+
+  let md = '---\n';
+  if(showTitle) md += `title: "${title.replace(/"/g,'\\"')}"\n`;
+  md += `date: ${previewDate} ${previewTime}\n`;
+  md += `city: "${city}"\n`;
+  md += `category: "${serviceKey}"\n`;
+  if(tags.trim()){
+    const arr = tags.split(',').map(t=>t.trim()).filter(Boolean);
+    if(arr.length){
+      md += 'tags:\n';
+      arr.forEach(t => md += ` - "${t.replace(/"/g,'\\"')}"\n`);
+    }
+  }
+  md += '---\n\n';
+  blocks.forEach(p => md += p + '\n\n');
+  md += buildCTAForMarkdown(title, termo, city) + '\n\n';
+  md += `<!-- slug: ${previewDate}-${slug} -->\n`;
+
+  document.getElementById('preview').textContent = md;
+}
+
+/* ========== GERAR ZIP ========== */
+async function generateAllPostsZip() {
+  if(typeof JSZip === 'undefined'){
+    await new Promise(r => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+      s.onload = r;
+      document.body.appendChild(s);
+    });
+  }
+  const zip = new JSZip();
+  const titleFormat = document.getElementById('titleFormat').value;
+  const templateChoice = document.getElementById('templateChoice').value;
+  const tags = document.getElementById('tags').value;
+  const extraContent = document.getElementById('extraContent').value;
+
+  for(const serviceKey in DATA.services){
+    for(const city of DATA.cities){
+      const { md, filename } = buildPostMarkdown({
+        serviceKey, city, titleOverride: '', titleFormat, templateChoice, tags, manualSlug: '', timeOfDay: '', extraContent
+      });
+      zip.file(filename, md);
+    }
+  }
+  zip.generateAsync({type:"blob"}).then(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'posts-3-por-dia.zip';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    alert('ZIP com todos os posts gerado! (3 por dia)');
+  });
+}
+
+/* ========== EVENTOS ========== */
+document.getElementById('generateDownload').onclick = () => {
+  const params = {
+    serviceKey: serviceSelect.value,
+    city: citySelect.value,
+    titleOverride: document.getElementById('titleOverride').value,
+    titleFormat: document.getElementById('titleFormat').value,
+    templateChoice: document.getElementById('templateChoice').value,
+    tags: document.getElementById('tags').value,
+    manualSlug: document.getElementById('slug').value,
+    timeOfDay: document.getElementById('timeOfDay').value,
+    extraContent: document.getElementById('extraContent').value
+  };
+  const { md, filename } = buildPostMarkdown(params);
+  const blob = new Blob([md], {type: 'text/markdown'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  document.getElementById('preview').textContent = md;
+  alert(`Pronto! ${filename}\nPróximos posts: 08h → 12h → 18h automaticamente`);
+};
+
+document.getElementById('previewBtn').onclick = updatePreview;
+document.getElementById('generateAll').onclick = generateAllPostsZip;
+document.getElementById('resetDate').onclick = () => confirm('Resetar agendamento?') && resetAutoDate();
+document.getElementById('clearStorage').onclick = () => confirm('Limpar tudo?') && localStorage.clear() && alert('Limpo!');
+
+updatePreview(); // inicial
+</script>
+</body>
+</html>
